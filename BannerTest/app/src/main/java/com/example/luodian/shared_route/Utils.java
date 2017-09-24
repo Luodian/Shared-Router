@@ -1,4 +1,4 @@
-package com.example.administrator.bannertest;
+package com.example.luodian.shared_route;
 
 import android.annotation.SuppressLint;
 import android.content.Context;
@@ -11,9 +11,6 @@ import java.lang.reflect.Method;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 
-/**
- * Created by ouyangshen on 2016/9/11.
- */
 public class Utils {
     //根据手机的分辨率从 dp 的单位 转成为 px(像素)
     public static int dip2px(Context context, float dpValue) {
