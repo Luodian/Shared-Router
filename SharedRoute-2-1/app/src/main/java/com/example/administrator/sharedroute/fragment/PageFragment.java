@@ -3,8 +3,10 @@ package com.example.administrator.sharedroute.fragment;
 import android.animation.Animator;
 import android.animation.ValueAnimator;
 import android.content.Context;
+import android.graphics.Color;
 import android.graphics.Path;
 import android.graphics.PathMeasure;
+import android.os.AsyncTask;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Message;
@@ -23,13 +25,21 @@ import android.view.ViewGroup;
 import android.view.animation.LinearInterpolator;
 import android.widget.ImageView;
 import android.widget.RelativeLayout;
+import android.widget.Toast;
 
 import com.example.administrator.sharedroute.R;
-import com.example.administrator.sharedroute.adapter.SearchNeedsRcViewAdapter;
+import com.example.administrator.sharedroute.adapter.PullRecyclerViewAdapter;
 import com.example.administrator.sharedroute.entity.listItem;
-import com.example.administrator.sharedroute.localdatabase.OrderDao;
-import com.example.administrator.sharedroute.utils.EndLessOnScrollListener;
+import com.example.administrator.sharedroute.utils.CommonHttp;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.UnsupportedEncodingException;
+import java.net.HttpURLConnection;
+import java.net.MalformedURLException;
+import java.net.ProtocolException;
+import java.net.URL;
+import java.net.URLEncoder;
 import java.util.ArrayList;
 
 import static com.example.administrator.sharedroute.activity.SearchNeedsActivity.goodsCount;
@@ -44,29 +54,26 @@ public class PageFragment extends Fragment {
     private boolean isFirst = true;
     Vibrator vibrator;
 
+    boolean isLoading;
+
     private CoordinatorLayout mShoppingCartRly;
-    private SearchNeedsRcViewAdapter adapter;
+
+    private PullRecyclerViewAdapter adapter;
+
     // 贝塞尔曲线中间过程点坐标
     private float[] mCurrentPosition = new float[2];
     // 路径测量
     private PathMeasure mPathMeasure;
     // 购物车商品数目
-    private ArrayList<listItem> myDataset;
+    private ArrayList<listItem> TaskListItem = new ArrayList<>();
 
     private FloatingActionButton pos_mfab;
 
-    private Handler handler = new Handler(){
-        public void handleMessage(Message msg) {
-            Log.e("tag", "IS_LOADED="+IS_LOADED);
-            if(!IS_LOADED){
-                IS_LOADED = true;
-                //这里执行加载数据的操作
-                Log.e("tag", "我是page"+(mTabPos+1));
-            }
-        }
-    };
+    private Handler handler = new Handler();
 
     private SwipeRefreshLayout mRefreshLayout;
+    private LinearLayoutManager llm;
+    private RecyclerView mrc;
 
     public PageFragment(int serial){
         mSerial = serial;
@@ -94,17 +101,17 @@ public class PageFragment extends Fragment {
 
         View view = inflater.inflate(R.layout.campus1_search_needs, container, false);
 
-        RecyclerView mrc = (RecyclerView) view.findViewById(R.id.searchNeeds_recycler_view);
+        mrc = (RecyclerView) view.findViewById(R.id.searchNeeds_recycler_view);
 //        // use this setting to improve performance if you know that changes
 //        // in content do not change the layout size of the RecyclerView
         mrc.setHasFixedSize(true);
 //        // use a linear layout manager
-        LinearLayoutManager llm = new LinearLayoutManager(getActivity());
+        llm = new LinearLayoutManager(getActivity());
         mrc.setLayoutManager(llm);
         vibrator = (Vibrator)getContext().getSystemService(Context.VIBRATOR_SERVICE);
 
         refreshCart();
-        init_data();
+//        init_data();
 
         // 是否显示购物车商品数目
         mShoppingCartRly = (CoordinatorLayout) view.findViewById(R.id.searchNeeds_center_relView);
@@ -114,8 +121,8 @@ public class PageFragment extends Fragment {
         //End pos
 
         // 添加数据源
-        adapter = new SearchNeedsRcViewAdapter(myDataset);
-        adapter.setCallBackListener(new SearchNeedsRcViewAdapter.CallBackListener() {
+        adapter = new PullRecyclerViewAdapter(TaskListItem);
+        adapter.setCallBackListener(new PullRecyclerViewAdapter.CallBackListener() {
             @Override
             public void callBackImg(ImageView goodsImg) {
                 // 添加商品到购物车
@@ -125,19 +132,58 @@ public class PageFragment extends Fragment {
         mrc.setAdapter(adapter);
 
         mRefreshLayout = (SwipeRefreshLayout) view.findViewById(R.id.layout_swipe_refresh);
+        mRefreshLayout.setColorSchemeColors(Color.RED, Color.CYAN);
         mRefreshLayout.setOnRefreshListener(new SwipeRefreshLayout.OnRefreshListener() {
             public void onRefresh() {
-                //我在List最前面加入一条数据
-
-//                //数据重新加载完成后，提示数据发生改变，并且设置现在不在刷新
-//                adapter.notifyDataSetChanged();
-                mRefreshLayout.setRefreshing(false);
+                mRefreshLayout.setRefreshing(true);
+                new RefreshTask().execute();
             }
         });
-        mrc.addOnScrollListener(new EndLessOnScrollListener(llm) {
+
+        mRefreshLayout.post(new Runnable() {
             @Override
-            public void onLoadMore(int currentPage) {
-                loadMoreData();
+            public void run() {
+                mRefreshLayout.setRefreshing(true);
+                new InitTask(1).execute();
+            }
+        });
+
+        mrc.setAdapter(adapter);
+        mrc.addOnScrollListener(new RecyclerView.OnScrollListener() {
+            @Override
+            public void onScrollStateChanged(RecyclerView recyclerView, int newState) {
+                super.onScrollStateChanged(recyclerView, newState);
+                Log.d("test", "StateChanged = " + newState);
+
+
+            }
+
+            @Override
+            public void onScrolled(RecyclerView recyclerView, int dx, int dy) {
+                super.onScrolled(recyclerView, dx, dy);
+                Log.d("test", "onScrolled");
+
+                int lastVisibleItemPosition = llm.findLastVisibleItemPosition();
+                if (lastVisibleItemPosition + 1 == adapter.getItemCount()) {
+                    Log.d("test", "loading executed");
+
+                    boolean isRefreshing = mRefreshLayout.isRefreshing();
+                    if (isRefreshing) {
+                        adapter.notifyItemRemoved(adapter.getItemCount());
+                        return;
+                    }
+                    if (!isLoading) {
+                        isLoading = true;
+                        handler.postDelayed(new Runnable() {
+                            @Override
+                            public void run() {
+                                new MoreTask().execute();
+                                Log.d("test", "load more completed");
+                                isLoading = false;
+                            }
+                        }, 1000);
+                    }
+                }
             }
         });
 
@@ -147,15 +193,6 @@ public class PageFragment extends Fragment {
             sendMessage();
         }
         return view;
-    }
-
-    //每次上拉加载的时候，给RecyclerView的后面添加了10条数据数据
-    private void loadMoreData() {
-        for (int i = 0; i < 10; i++) {
-            listItem item1 = new listItem("书籍", "小件", "今天 12：30", "一区 顺丰速运", "今天 12：30", "一区 正心楼 524", 2.0, false);
-            myDataset.add(item1);
-            adapter.notifyDataSetChanged();
-        }
     }
 
     private void addGoodsToCart(ImageView goodsImg) {
@@ -272,21 +309,157 @@ public class PageFragment extends Fragment {
         }
     }
 
-
-
-    protected void init_data()
+    private class InitTask extends AsyncTask<Void, Void, String>
     {
-        myDataset = new ArrayList<>();
-        listItem item1 = new listItem("书籍", "小件", "今天 12：30", "一区 顺丰速运", "今天 12：30", "一区 正心楼 524", 2.0, false);
-        listItem item2 = new listItem("书籍", "小件", "今天 12：30", "一区 顺丰速运", "今天 12：30", "一区 正心楼 524", 2.0, false);
-        listItem item3 = new listItem("设备","小件","今天 18：30","一区 韵达快递","今天 12：30","一区 2公寓 5024",8.0,false);
-        listItem item4 = new listItem("设备","小件","今天 18：30","一区 韵达快递","今天 12：30","一区 2公寓 5024",8.0,false);
-        listItem item5 = new listItem("食物","小件","今天 15：30","一区 中通快递","今天 12：30","一区 18公寓 9001",5.0,false);
-        myDataset.add(item1);
-        myDataset.add(item2);
-        myDataset.add(item1);
-        myDataset.add(item3);
-        myDataset.add(item4);
-        myDataset.add(item5);
+
+        private int requestItemNumber;
+
+        InitTask(int _a)
+        {
+            requestItemNumber = _a;
+        }
+
+        @Override
+        protected String doInBackground(Void... params) {
+            String result = null;
+            String path = "http://suc.free.ngrok.cc/sharedroot_server/Task?action=show&length=40";
+            HttpURLConnection con=null;
+            InputStream is=null;
+            StringBuilder sbd=new StringBuilder();
+            try
+            {
+                URL url=new URL(path);
+                con= (HttpURLConnection) url.openConnection();
+                con.setConnectTimeout(5*1000);
+                con.setReadTimeout(5*1000);
+                /*
+                * http响应码：getResponseCode
+                  200：成功 404：未找到 500：发生错误
+              */
+                if (con.getResponseCode()==200){
+                    is=con.getInputStream();
+                    int next=0;
+                    byte[] bt=new byte[1024];
+                    while ((next=is.read(bt))>0)
+                    {
+                        sbd.append(new String(bt,0,next));
+                    }
+                }
+            } catch (IOException e) {
+                e.printStackTrace();
+            }finally {
+                if (is!=null){
+                    try {
+                        is.close();
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+                }
+                if (con!=null){
+                    con.disconnect();
+                    //断开连接
+                }
+            }
+            return sbd.toString();
+        }
+
+        @Override
+        protected void onPostExecute(String result) {
+            super.onPostExecute(result);
+
+            if (mRefreshLayout != null) {
+                mRefreshLayout.setRefreshing(false);
+            }
+            //没有新的数据，提示消息
+            if (result == null) {
+                Toast.makeText(getActivity(), R.string.check_network_status, Toast.LENGTH_SHORT).show();
+            }
+            else {
+                Toast.makeText(getActivity(), result, Toast.LENGTH_SHORT).show();
+//                TaskListItem.addAll(data);
+//                adapter.notifyDataSetChanged();
+            }
+        }
+
+    }
+
+    private class RefreshTask extends AsyncTask<Void, Void, ArrayList<listItem>> {
+        @Override
+        protected ArrayList<listItem> doInBackground(Void... params) {
+            try {
+                Thread.sleep(1000);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+            ArrayList<listItem> data;
+            data = new ArrayList<>();
+            listItem item1 = new listItem("上滑", "小件", "今天 12：30", "一区 顺风速运", "今天 12：30", "一区 正心楼 524", 2.0, false);
+            data.add(item1);
+//            //只有第一次需要加载头部的轮播图片
+//            //下拉刷新时候不加轮播图片
+//            if (myDataset.size() == 0) {
+//                data.addAll(getRotationItem());
+//            }
+
+//            data.addAll(getMoreById(mColumn, params[0]));
+            return data;
+
+        }
+
+        @Override
+        protected void onPostExecute(ArrayList<listItem> data) {
+            super.onPostExecute(data);
+
+            if (mRefreshLayout != null) {
+                mRefreshLayout.setRefreshing(false);
+            }
+            //没有新的数据，提示消息
+            if (data == null || data.size() == 0) {
+                Toast.makeText(getActivity(), R.string.list_no_data, Toast.LENGTH_SHORT).show();
+            } else {
+                TaskListItem.addAll(data);
+                adapter.notifyDataSetChanged();
+            }
+        }
+    }
+
+    private class MoreTask extends AsyncTask<Void, Void, ArrayList<listItem>> {
+        @Override
+        protected ArrayList<listItem> doInBackground(Void... params) {
+            try {
+                Thread.sleep(1000);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+            ArrayList<listItem> data;
+            data = new ArrayList<>();
+            listItem item1 = new listItem("下滑", "小件", "今天 12：30", "一区 顺风速运", "今天 12：30", "一区 正心楼 524", 2.0, false);
+            data.add(item1);
+            data.add(item1);
+//            //只有第一次需要加载头部的轮播图片
+//            //下拉刷新时候不加轮播图片
+//            if (myDataset.size() == 0) {
+//                data.addAll(getRotationItem());
+//            }
+
+//            data.addAll(getMoreById(mColumn, params[0]));
+            return data;
+        }
+
+        @Override
+        protected void onPostExecute(ArrayList<listItem> data) {
+            super.onPostExecute(data);
+
+            if (mRefreshLayout != null) {
+                mRefreshLayout.setRefreshing(false);
+            }
+            //没有新的数据，提示消息
+            if (data == null || data.size() == 0) {
+                Toast.makeText(getActivity(), R.string.list_no_data, Toast.LENGTH_SHORT).show();
+            } else {
+                TaskListItem.addAll(data);
+                adapter.notifyDataSetChanged();
+            }
+        }
     }
 }

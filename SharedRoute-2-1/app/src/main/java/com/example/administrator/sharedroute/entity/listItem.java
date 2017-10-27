@@ -159,13 +159,13 @@ public class listItem implements Parcelable{
 
     @Override
     public void writeToParcel(Parcel dest, int flags) {
-            dest.writeString(expressType);
-            dest.writeString(expressSize);
-            dest.writeString(inTimeStamp);
-            dest.writeString(inLocation);
-            dest.writeString(outLocation);
-            dest.writeString(outTimeStamp);
-            dest.writeDouble(price);
+        dest.writeString(expressType);
+        dest.writeString(expressSize);
+        dest.writeString(inTimeStamp);
+        dest.writeString(inLocation);
+        dest.writeString(outLocation);
+        dest.writeString(outTimeStamp);
+        dest.writeDouble(price);
     }
     public static final Creator<listItem> CREATOR = new Creator(){
         @Override
@@ -187,4 +187,4 @@ public class listItem implements Parcelable{
         }
     };
 
-    }
+}

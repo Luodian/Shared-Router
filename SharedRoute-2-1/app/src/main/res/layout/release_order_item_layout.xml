@@ -85,5 +85,4 @@
             android:src="@mipmap/ic_none_receive_status" />
 
     </LinearLayout>
-
 </android.support.v7.widget.CardView>

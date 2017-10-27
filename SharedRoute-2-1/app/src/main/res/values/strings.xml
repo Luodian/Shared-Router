@@ -3,6 +3,8 @@
     <string name="title_home">首页</string>
     <string name="title_dashboard">发布需求</string>
     <string name="title_notifications">寻找需求</string>
+    <string name="title_register">注册信息</string>
+    <string name="title_publishneeds">发布需求</string>
     <string name="hello_blank_fragment">Hello blank fragment</string>
     <string name="other_transition_name">transition_reveal</string>
     <string name="title_activity_login">Sign in</string>
@@ -19,4 +21,13 @@
     <string name="permission_rationale">"Contacts permissions are needed for providing email
         completions."
     </string>
+
+    <!-- list 到了最底部 没有新数据了-->
+    <string name="list_more_data">更新了0条数据~</string>
+
+
+    <!-- list 到了最底部 没有新数据了-->
+    <string name="list_no_data">没有新的内容了哦~</string>
+
+    <string name="check_network_status">请检查网络状态</string>
 </resources>

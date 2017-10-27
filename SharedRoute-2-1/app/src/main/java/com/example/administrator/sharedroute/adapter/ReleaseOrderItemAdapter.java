@@ -61,6 +61,8 @@ public class ReleaseOrderItemAdapter extends RecyclerView.Adapter<ReleaseOrderIt
             mContext = parent.getContext();
         }
         if (orderDao == null) orderDao = new OrderDao(mContext);
+
+
         View view = LayoutInflater.from(mContext).inflate(R.layout.release_order_item_layout,parent,false);
         final ViewHolder holder = new ViewHolder(view);
 
@@ -75,16 +77,16 @@ public class ReleaseOrderItemAdapter extends RecyclerView.Adapter<ReleaseOrderIt
             public boolean onLongClick(View v){
                 final int position = holder.getAdapterPosition();
                 BlurBehind.getInstance().execute((Activity) mContext, new OnBlurCompleteListener() {
-                @Override
-                public void onBlurComplete() {
-                    Intent intent = new Intent(mContext, BlurredActivity.class);
-                    intent.setFlags(Intent.FLAG_ACTIVITY_NO_ANIMATION);
-                    intent.putExtra("title_name","title"+Integer.toString(position+1));
-                    intent.putExtra("select","release");
-                    intent.putExtra("Activity","Main");
-                    mContext.startActivity(intent);
-                }
-            });
+                    @Override
+                    public void onBlurComplete() {
+                        Intent intent = new Intent(mContext, BlurredActivity.class);
+                        intent.setFlags(Intent.FLAG_ACTIVITY_NO_ANIMATION);
+                        intent.putExtra("title_name","title"+Integer.toString(position+1));
+                        intent.putExtra("select","release");
+                        intent.putExtra("Activity","Main");
+                        mContext.startActivity(intent);
+                    }
+                });
                 return true;
             }
         });
